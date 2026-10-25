@@ -1,0 +1,20 @@
+# Entorno virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Env
+.env
+
+# Editor
+.vscode/
+
+# Outputs y logs
+logs/
+output/
+
+# OS
+.DS_Store
