@@ -157,16 +157,18 @@ def _export_docx(inv: InvoiceSchema) -> bytes:
 
 def _export_pdf(inv: InvoiceSchema) -> bytes:
     from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.lib import colors
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     buffer = io.BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
-    style_ok = {"fontName": "Helvetica"}
+    style_ok = ParagraphStyle("body", fontName="Helvetica", fontSize=9, leading=13)
     story: list = []
 
-    story.append(Paragraph(f"<b>Factura {inv.invoice_number or ''}</b>", style_ok))
+    story.append(Paragraph(f"<b>Factura {inv.invoice_number or ''}</b>",
+                           ParagraphStyle("title", parent=style_ok, fontSize=14, leading=18)))
     story.append(Paragraph(
         f"Fecha: {inv.issue_date or '—'} · Moneda: {inv.currency or '—'}", style_ok))
     if inv.supplier:

@@ -17,10 +17,15 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# En modo eager (dev sin Redis) usamos el transporte "memory://": Celery 5.x
+# aún abre un producer en apply_async, y con redis:// exigiría el paquete redis.
+_eager = settings.celery_eager
+_broker = "memory://" if _eager else settings.redis_url
+
 celery = Celery(
     "ocr_saas",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=_broker,
+    backend="cache+memory://" if _eager else settings.redis_url,
     include=["app.workers.tasks"],
 )
 
