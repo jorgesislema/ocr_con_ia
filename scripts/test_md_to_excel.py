@@ -33,7 +33,12 @@ logging.basicConfig(
 _log = logging.getLogger("md2excel")
 
 # ── CONFIGURACIÓN ────────────────────────────────────────────────────────────
-DEEPSEEK_API_KEY = "***REMOVED***SEE-GITIGNORED-.env***"
+# Seguridad: la API key NUNCA va en el código (una clave filtrada fue eliminada
+# del historial con git-filter-repo). Léela del entorno o del .env del proyecto;
+# en producción la capa SaaS la obtiene vía app.core.config.get_secret().
+import os
+
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 PROVIDER        = "DeepSeek"
 MODEL           = "deepseek-v4-flash"
 MD_FOLDER       = ROOT / "pruebas"
