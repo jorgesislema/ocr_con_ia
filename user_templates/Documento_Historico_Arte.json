@@ -1,0 +1,16 @@
+{
+  "fields": [
+    "titulo",
+    "autor",
+    "anio_publicacion",
+    "editorial_imprenta",
+    "lugar_publicacion",
+    "idioma",
+    "num_paginas",
+    "descripcion_ilustracion",
+    "texto_visible",
+    "dedicatoria",
+    "estado_conservacion",
+    "notas_adicionales"
+  ]
+}

@@ -1,0 +1,43 @@
+# Entorno virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Env
+.env
+
+# Editor
+.vscode/
+
+# Outputs y logs
+logs/
+output/
+out.txt
+
+# Caches
+.mypy_cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archivos generados / temporales
+tmp_format_test/
+pruebas/
+.tmp_check_keys.py
+check_syntax2.py
+.workspace_tools/
+
+# Directorios de tests vacíos
+scripts/tests/
+
+# Archivos Excel generados
+*.xlsx
+*.xlsx.*
+
+# Ignorar CONTEXT.md (documento de contexto local)
+CONTEXT.md

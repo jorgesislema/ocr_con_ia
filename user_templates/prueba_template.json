@@ -1,0 +1,7 @@
+{
+  "fields": [
+    "subtotal",
+    "total",
+    "numero_factura"
+  ]
+}

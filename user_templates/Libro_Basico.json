@@ -1,0 +1,10 @@
+{
+  "fields": [
+    "titulo",
+    "autor",
+    "anio_publicacion",
+    "editorial_imprenta",
+    "lugar_publicacion",
+    "texto_visible"
+  ]
+}

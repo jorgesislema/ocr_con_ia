@@ -1,0 +1,17 @@
+[MASTER]
+# Permitir importaciones binarias (PyQt6, cv2) sin errores de stub
+extension-pkg-allow-list=PyQt6,cv2,numpy
+
+[MESSAGES CONTROL]
+# W0703 - broad-except: válido en código GUI PyQt6 para robustez
+# W0212 - protected-access: arquitectura de closures interna deliberada
+# W0108 - unnecessary-lambda: patrón de conexión de señales Qt
+# W0613 - unused-argument: firmas de signal handlers requieren argumentos de posición
+# W0611 - unused-import: imports opcionales cargados en runtime
+# C0415 - import-not-at-top: imports dentro de funciones (lazy-load intencionado en esta app)
+# R0801 - duplicate-code: fragmentos similares entre paneles de la UI
+# R0903 - too-few-public-methods: clases de datos/configuración intencionalmente simples
+disable=W0703,W0212,W0108,W0613,W0611,C0415,R0801,R0903
+
+[FORMAT]
+max-line-length=120

@@ -1,0 +1,17 @@
+{
+  "numero_factura": "PEGIV-1030765",
+  "fecha_emision": "2019-01-15",
+  "total": 193.0,
+  "currency": "SR",
+  "proveedor": "OJC MARKETING SDN BHD",
+  "subtotal": 193.0,
+  "iva": 0.0,
+  "lineas": [
+    {
+      "description": "KINGS SAFETY SHOES KWD 805",
+      "cantidad": 1.0,
+      "precio_unitario": 193.0,
+      "line_total": 193.0
+    }
+  ]
+}
