@@ -51,13 +51,33 @@ app/
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/api/v1/documents` | Sube el archivo y encola. Devuelve `task_id` (HTTP 202). |
+| `POST` | `/auth/register` | **Solo operador** (`X-Admin-Key`): crea la cuenta del cliente tras el pago. |
+| `POST` | `/auth/login` | Email + contraseña → JWT (`access_token`). |
+| `GET` | `/auth/me` | Datos de sesión (email, plan, uso) para la navbar. |
+| `POST` | `/api/v1/documents` | Sube el archivo y encola. Devuelve `task_id` (HTTP 202). Requiere JWT o `X-API-Key`; aplica el límite del plan (403 al agotarlo). |
 | `GET` | `/api/v1/tasks/{id}` | Estado (`queued→processing→completed/needs_review/failed`) + JSON canónico. |
 | `PATCH` | `/api/v1/tasks/{id}` | Guarda correcciones humanas y re-valida matemáticamente. |
-| `POST` | `/api/v1/tasks/{id}/export` | Genera `xlsx` / `csv` / `docx` / `pdf`. |
+| `POST` | `/api/v1/tasks/{id}/export` | `{formato, columnas}` → xlsx/csv/docx/txt/pdf con sanitización. |
 | `GET` | `/health` | Health check. |
 
-Autenticación: header `X-API-Key` (usuario demo en desarrollo).
+### Modelo comercial "On-Demand" y planes
+
+Sin pasarela de pago: el cliente paga por transferencia y el operador crea su
+cuenta con `POST /auth/register` (protegido por `ADMIN_KEY`). Planes:
+`free` = 50 documentos (`max_documents=50`), `pro` = ilimitado
+(`max_documents=0`). El contador `documents_used` sube +1 por documento
+procesado con éxito; al agotar la cuota, la subida responde 403 con
+"Has alcanzado el límite de tu plan. Contacta a soporte para actualizar a Pro".
+
+## Despliegue costo cero (Render / Supabase / Vercel)
+
+| Variable | Efecto |
+|---|---|
+| `DATABASE_URL` | Vacía → SQLite local. `postgres://…` de Supabase/Render → PostgreSQL (esquema normalizado automáticamente). |
+| `REDIS_URL` | Vacía → la cola se resuelve con **BackgroundTasks** de FastAPI (sin Redis, ideal <100 docs/día). Configurada → **Celery + Redis**. |
+| `JWT_SECRET` | Secreto de firma JWT (**obligatorio** en producción). |
+| `ADMIN_KEY` | Clave de operador para `/auth/register`. |
+| `CORS_ORIGINS` / `CORS_ORIGIN_REGEX` | Dominios del frontend (Vercel/Netlify) + regex para previews. |
 
 ## Flujo del frontend (4 pasos)
 

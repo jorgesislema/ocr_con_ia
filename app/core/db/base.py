@@ -19,10 +19,12 @@ from app.core.db.models import Base
 
 settings = get_settings()
 
+# DATABASE_URL efectiva (PostgreSQL prod con esquema normalizado, SQLite dev).
 # check_same_thread=False → SQLite soporta hilos del worker y de la API.
+_effective_url = settings.resolved_database_url()
 engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+    _effective_url,
+    connect_args={"check_same_thread": False} if _effective_url.startswith("sqlite") else {},
     pool_pre_ping=True,
 )
 

@@ -7,9 +7,30 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- ══ TAREA 2: pantalla de Login (bloquea el flujo sin token) ══ -->
+  <div id="loginScreen" class="login-overlay">
+    <form id="loginForm" class="login-card">
+      <div class="brand big">◈ OCR Con IA</div>
+      <p class="muted">Accede para procesar tus documentos con IA</p>
+      <label class="field"><span>Email</span>
+        <input id="loginEmail" type="email" autocomplete="username" required />
+      </label>
+      <label class="field"><span>Contraseña</span>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="loginError" class="login-error"></p>
+      <button class="btn primary wide" type="submit">Entrar</button>
+      <p class="muted center small">¿Sin cuenta? Tu comercial te la habilita tras el pago.</p>
+    </form>
+  </div>
+
+  <!-- ══ TAREA 2: navbar con sesión (Hola, email | Plan | Uso) ══ -->
   <header class="topbar">
-    <div class="brand">◈ OCR Con IA <span class="badge">SaaS v1.0</span></div>
-    <input id="apiKey" type="password" placeholder="X-API-Key (opcional en dev)" class="apikey-input" />
+    <div class="brand">◈ OCR Con IA <span class="badge">SaaS v1.1</span></div>
+    <div class="session-box">
+      <span id="userInfo" class="user-info" hidden></span>
+      <button id="logoutBtn" class="btn small ghost" hidden>Cerrar Sesión</button>
+    </div>
   </header>
 
   <!-- ══ Indicador de pasos: 1 Carga → 2 Progreso → 3 Revisión → 4 Exportación ══ -->

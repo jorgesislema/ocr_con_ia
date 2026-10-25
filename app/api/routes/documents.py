@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy.orm import Session
@@ -90,6 +90,7 @@ def _parse_columnas(raw: str | None) -> list[str] | None:
 
 @router.post("/documents", status_code=202)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     pais: str | None = Form(None, description="Código ISO del país (EC, MX, ES…): fija la normativa del prompt"),
     columnas: str | None = Form(None, description="Columnas prioritarias: JSON array o separadas por coma"),
@@ -97,6 +98,10 @@ async def upload_document(
     db: Session = Depends(get_db),
 ) -> dict:
     """Recibe el archivo, lo almacena y encola la extracción asíncrona.
+
+    Autenticación JWT (TAREA 1.4) con límite de plan: free = ``max_documents``
+    documentos procesados; 0 = ilimitado (Pro). El contador se incrementa en
+    el worker cuando el documento se procesa con éxito.
 
     ``pais`` y ``columnas`` (opcionales) viajan con la tarea hasta el worker,
     que los inyecta en el prompt dinámico (TAREA 1) sin cambiar el esquema DB.
@@ -106,6 +111,15 @@ async def upload_document(
         de ``GET /tasks/{task_id}``.
     """
     settings = get_settings()
+
+    # ── Límite del plan (TAREA 1.4): 403 al agotar la cuota ────────────────
+    if user.max_documents > 0 and user.documents_used >= user.max_documents:
+        raise HTTPException(
+            403,
+            "Has alcanzado el límite de tu plan. "
+            "Contacta a soporte para actualizar a Pro",
+        )
+
     if file.content_type not in ALLOWED_MIME:
         raise HTTPException(415, f"Tipo no soportado: {file.content_type}. "
                                  f"Permitidos: {sorted(ALLOWED_MIME)}")
@@ -147,13 +161,22 @@ async def upload_document(
     db.add(task)
     db.commit()
 
-    # ── Encolado (regla #5): eager en dev, Redis/Celery en prod ────────────
-    # pais/columnas viajan como kwargs de la tarea (sin cambios de esquema DB).
-    from app.workers.tasks import process_document
+    # ── Encolado (regla #5 + TAREA 3.2) ─────────────────────────────────────
+    # Con REDIS_URL → Celery (volumen alto). Sin Redis → BackgroundTasks
+    # (despliegue costo cero, ideal para <100 documentos/día).
+    cols = _parse_columnas(columnas)
+    if settings.use_background_tasks:
+        from app.workers.tasks import run_extraction
 
-    process_document.delay(task.id, pais=pais, columnas=_parse_columnas(columnas))
-    _log.info("Tarea %s encolada (%s, %d pág., pais=%s)", task.id, document.filename,
-              page_count, pais or "auto")
+        background_tasks.add_task(run_extraction, task.id, pais, cols)
+        backend = "background"
+    else:
+        from app.workers.tasks import process_document
+
+        process_document.delay(task.id, pais=pais, columnas=cols)
+        backend = "celery"
+    _log.info("Tarea %s encolada vía %s (%s, %d pág., pais=%s)", task.id, backend,
+              document.filename, page_count, pais or "auto")
 
     return {"task_id": task.id, "status": "queued", "page_count": page_count}
 

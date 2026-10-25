@@ -9,6 +9,11 @@ pydantic==2.12.5
 pydantic-settings==2.7.1
 python-multipart==0.0.20
 
+# Autenticación JWT (TAREA 1)
+passlib==1.7.4           # hashing de contraseñas (PBKDF2-SHA256)
+python-jose[cryptography]==3.4.0   # emisión/validación de tokens JWT
+email-validator==2.2.0   # EmailStr de Pydantic
+
 # Base de datos
 sqlalchemy==2.0.36
 alembic==1.14.0          # migraciones (prod)
@@ -30,6 +35,7 @@ hvac==2.3.0              # opcional: backend HashiCorp Vault
 # Exportación (Excel / CSV / Word / PDF)
 openpyxl==3.1.5
 xlsxwriter==3.2.9
+pandas==2.2.3            # DocumentExporter.to_csv (TAREA 3)
 python-docx==1.2.0
 reportlab==4.2.5
 

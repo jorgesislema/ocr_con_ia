@@ -17,10 +17,18 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# En modo eager (dev sin Redis) usamos el transporte "memory://": Celery 5.x
-# aún abre un producer en apply_async, y con redis:// exigiría el paquete redis.
-_eager = settings.celery_eager
-_broker = "memory://" if _eager else settings.redis_url
+# TAREA 3.2: Celery SOLO se usa cuando hay Redis configurado. Sin Redis, la
+# cola la resuelven las BackgroundTasks de FastAPI y este módulo queda en
+# modo memoria/eager (por si algún test o script lo importa).
+import os  # noqa: E402
+
+if settings.redis_url:
+    _explicit = os.environ.get("OCR_CELERY_EAGER", "")
+    _eager = _explicit.lower() in ("1", "true", "yes") if _explicit else False
+    _broker = settings.redis_url
+else:
+    _eager = True
+    _broker = "memory://"
 
 celery = Celery(
     "ocr_saas",
@@ -41,7 +49,7 @@ celery.conf.update(
     task_soft_time_limit=540,
 )
 
-# Modo desarrollo sin Redis: ejecución síncrona en proceso.
-if settings.celery_eager:
+# Modo eager: sin Redis o pedido explícitamente (OCR_CELERY_EAGER=true).
+if _eager:
     celery.conf.task_always_eager = True
     celery.conf.task_eager_propagates = False

@@ -1,28 +1,111 @@
 /* ══════════════════════════════════════════════════════════════════
-   OCR Con IA — SaaS · lógica del frontend (flujo de 4 pasos)
+   OCR Con IA — SaaS · lógica del frontend (TAREA 2 + flujo de 4 pasos)
 
-   Paso 1 Carga      → POST /api/v1/documents (multipart) → task_id
-   Paso 2 Progreso   → GET  /api/v1/tasks/{id} (polling 1.5s)
-   Paso 3 Revisión   → tabla editable + PATCH /api/v1/tasks/{id}
-   Paso 4 Exportación→ POST /api/v1/tasks/{id}/export (xlsx/csv/docx/pdf)
+   Autenticación JWT:
+     * Login → POST /auth/login → token guardado en localStorage.
+     * TODA petición fetch pasa por api(), que inyecta
+       'Authorization: Bearer <token>'.
+     * 401 → token limpiado y vuelta al login.
+     * GET /auth/me alimenta la navbar (Hola, email | Plan | Uso X/Y).
+     * Cerrar Sesión → borra el token y recarga.
 
-   Sin frameworks: fetch + DOM. Fácil de migrar a React/Vue si crece.
+   Flujo de negocio (igual que antes):
+     1 Carga → POST /api/v1/documents → task_id
+     2 Progreso → GET /api/v1/tasks/{id} (polling)
+     3 Revisión → PATCH /api/v1/tasks/{id}
+     4 Exportación → POST /api/v1/tasks/{id}/export
    ══════════════════════════════════════════════════════════════════ */
 
 "use strict";
+
+// ── Helpers (antes de cualquier uso) ──
+const $ = (sel) => document.querySelector(sel);
+
+// ══════════════════════════════════════════════════════════════════
+//  AUTENTICACIÓN (TAREA 2)
+// ══════════════════════════════════════════════════════════════════
+
+const TOKEN_KEY = "ocr_token";
+
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+/** Wrapper de fetch: inyecta el JWT en TODA petición al backend.
+ *  Si el token expiró/ es inválido (401), cierra sesión automáticamente. */
+async function api(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    clearToken();
+    showLogin("Tu sesión expiró. Inicia sesión de nuevo.");
+    throw new Error("No autenticado");
+  }
+  return res;
+}
+
+function showLogin(message = "") {
+  document.body.classList.remove("authenticated");
+  $("#loginScreen").style.display = "flex";
+  $("#userInfo").hidden = true;
+  $("#logoutBtn").hidden = true;
+  $("#loginError").textContent = message;
+}
+
+async function initAuthenticated() {
+  const res = await api("/auth/me");
+  if (!res.ok) {
+    if (res.status !== 401) showLogin("No se pudo validar tu sesión.");
+    return;
+  }
+  const me = await res.json();
+  const limit = me.max_documents > 0 ? me.max_documents : "Ilimitado";
+  $("#userInfo").textContent =
+    `Hola, ${me.email} | Plan: ${me.plan === "pro" ? "Pro" : "Free"} | ` +
+    `Uso: ${me.documents_used}/${limit} documentos`;
+  $("#userInfo").hidden = false;
+  $("#logoutBtn").hidden = false;
+  $("#loginError").textContent = "";
+  $("#loginScreen").style.display = "none";
+  document.body.classList.add("authenticated");
+}
+
+$("#loginForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("#loginEmail").value.trim();
+  const password = $("#loginPassword").value;
+  $("#loginError").textContent = "";
+  try {
+    const res = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error ${res.status}`);
+    }
+    const data = await res.json();
+    setToken(data.access_token);
+    await initAuthenticated();
+  } catch (exc) {
+    $("#loginError").textContent = exc.message === "No autenticado"
+      ? "Credenciales inválidas." : exc.message;
+  }
+});
+
+$("#logoutBtn")?.addEventListener("click", () => {
+  clearToken();          // borra el JWT
+  location.reload();     // recarga → vuelve al login
+});
 
 // ── Estado global mínimo ──
 const state = {
   taskId: null,
   invoice: null,       // InvoiceSchema actual (editable)
   pollTimer: null,
-};
-
-// ── Helpers ──
-const $ = (sel) => document.querySelector(sel);
-const apiHeaders = () => {
-  const key = $("#apiKey").value.trim();
-  return key ? { "X-API-Key": key } : {};
 };
 
 function goToStep(n) {
@@ -84,13 +167,17 @@ async function uploadFile(file) {
   const form = new FormData();
   form.append("file", file);
   try {
-    const res = await fetch("/api/v1/documents", {
-      method: "POST",
-      headers: apiHeaders(),
-      body: form,
-    });
+    // api() inyecta 'Authorization: Bearer <token>' (TAREA 2.3).
+    // FormData: NO fijar Content-Type manualmente (el navegador pone el boundary).
+    const res = await api("/api/v1/documents", { method: "POST", body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 403) {
+        log("🚫 " + err.detail);
+        setProgress(0, err.detail);
+        setTimeout(() => goToStep(1), 4000);
+        return;
+      }
       throw new Error(err.detail || `HTTP ${res.status}`);
     }
     const data = await res.json();
@@ -99,6 +186,7 @@ async function uploadFile(file) {
     setProgress(35, "En cola del motor de extracción…");
     startPolling();
   } catch (exc) {
+    if (exc.message === "No autenticado") return;
     log("ERROR: " + exc.message);
     setProgress(0, "Falló la subida: " + exc.message);
     setTimeout(() => goToStep(1), 2500);
@@ -115,7 +203,7 @@ function startPolling() {
     tick++;
     setProgress(Math.min(35 + tick * 6, 90), "La IA está extrayendo los datos…");
     try {
-      const res = await fetch(`/api/v1/tasks/${state.taskId}`, { headers: apiHeaders() });
+      const res = await api(`/api/v1/tasks/${state.taskId}`);
       const task = await res.json();
       if (task.status === "processing") log("Motor de IA procesando…");
       if (["completed", "needs_review"].includes(task.status)) {
@@ -133,6 +221,7 @@ function startPolling() {
         setTimeout(() => goToStep(1), 3000);
       }
     } catch (exc) {
+      if (exc.message === "No autenticado") return;
       log("Error consultando estado: " + exc.message);
     }
   }, 1500);
@@ -150,7 +239,6 @@ const META_FIELDS = [
 
 function renderReview(task) {
   const inv = state.invoice;
-  // Banner de validación
   const banner = $("#validationBanner");
   if (task.is_valid) {
     banner.className = "banner ok";
@@ -161,14 +249,12 @@ function renderReview(task) {
       (task.issues || []).map((i) => `• [${i.code}] ${i.message}`).join("<br>");
   }
 
-  // Campos de metadatos
   const metaBox = $("#metaFields");
   metaBox.innerHTML = "";
   META_FIELDS.forEach(([key, label]) => {
     const raw = key === "document_type" ? inv.document_type : inv[key];
     metaBox.appendChild(mkField(key, label, raw === null || raw === undefined ? "" : String(raw)));
   });
-  // Partes (emisor/receptor) como campos anidados
   metaBox.appendChild(mkField("supplier.name", "Emisor", inv.supplier?.name || ""));
   metaBox.appendChild(mkField("supplier.tax_id", "NIF/RUC emisor", inv.supplier?.tax_id || ""));
   metaBox.appendChild(mkField("customer.name", "Receptor", inv.customer?.name || ""));
@@ -332,9 +418,9 @@ $("#approveBtn").addEventListener("click", async () => {
 
 async function saveReview(approve) {
   try {
-    const res = await fetch(`/api/v1/tasks/${state.taskId}`, {
+    const res = await api(`/api/v1/tasks/${state.taskId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", ...apiHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ extracted_data: state.invoice, approve }),
     });
     const task = await res.json();
@@ -343,13 +429,13 @@ async function saveReview(approve) {
     if (task.status === "completed") {
       goToStep(4);
     } else {
-      // Revalidación fallida: se muestran los issues devueltos por el backend
       const banner = $("#validationBanner");
       banner.className = "banner error";
       banner.innerHTML = "<strong>⚠ Aún descuadrado.</strong> " +
         (task.issues || []).map((i) => `• [${i.code}] ${i.message}`).join("<br>");
     }
   } catch (exc) {
+    if (exc.message === "No autenticado") return;
     alert("Error guardando la revisión: " + exc.message);
   }
 }
@@ -363,10 +449,10 @@ $("#backToUpload").addEventListener("click", () => goToStep(1));
 document.querySelectorAll(".btn.export").forEach((btn) =>
   btn.addEventListener("click", async () => {
     const fmt = btn.dataset.fmt;
-    const res = await fetch(`/api/v1/tasks/${state.taskId}/export`, {
+    const res = await api(`/api/v1/tasks/${state.taskId}/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...apiHeaders() },
-      body: JSON.stringify({ format: fmt }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formato: fmt }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -393,3 +479,19 @@ $("#startOverBtn").addEventListener("click", () => {
   setProgress(0);
   goToStep(1);
 });
+
+// ══════════════════════════════════════════════════════════════════
+//  ARRANQUE: sin token → login; con token → validar y abrir la app
+// ══════════════════════════════════════════════════════════════════
+
+(async function bootstrap() {
+  if (!getToken()) {
+    showLogin();
+    return;
+  }
+  try {
+    await initAuthenticated();
+  } catch {
+    showLogin();
+  }
+})();

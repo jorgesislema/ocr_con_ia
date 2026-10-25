@@ -47,14 +47,28 @@ class ExportFormat(str, enum.Enum):
 
 
 class User(Base):
-    """Tenant del SaaS. Autenticación por API key (header ``X-API-Key``)."""
+    """Tenant del SaaS.
+
+    Autenticación doble:
+        * JWT (email + password) — para el frontend web (TAREA 1).
+        * ``api_key`` (header X-API-Key) — para integraciones programáticas.
+
+    Modelo comercial "On-Demand" sin pasarela: el cliente paga por
+    transferencia y el admin crea/actualiza la cuenta vía /auth/register.
+    ``max_documents = 0`` significa ilimitado (plan Pro).
+    """
 
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), default=None)
     api_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    plan: Mapped[str] = mapped_column(String(20), default="free")  # free | pro | enterprise
+    plan: Mapped[str] = mapped_column(String(20), default="free")  # free | pro
+    # Cuota mensual de documentos; 0 = ilimitado (Pro). Free = 50.
+    max_documents: Mapped[int] = mapped_column(Integer, default=50)
+    # Documentos procesados con éxito en el periodo actual (worker: +1).
+    documents_used: Mapped[int] = mapped_column(Integer, default=0)
     # Proveedor preferido del usuario: "auto" | "gemini" | "mistral"
     preferred_provider: Mapped[str] = mapped_column(String(20), default="auto")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -103,16 +103,22 @@ def _page_count(file_path: str, mime: str) -> int:
         return pdf.page_count
 
 
-@celery.task(name="process_document", bind=True, max_retries=2, default_retry_delay=10)
-def process_document(self, task_id: str,
-                     pais: str | None = None,
-                     columnas: list[str] | None = None) -> dict:
-    """Extrae, consolida y valida un documento. Devuelve resumen de estado.
+def run_extraction(task_id: str,
+                   pais: str | None = None,
+                   columnas: list[str] | None = None) -> dict:
+    """Pipeline completo de extracción — función PLANA, sin dependencia de Celery.
+
+    Es el núcleo que ambos backends de cola ejecutan (TAREA 3.2):
+        * BackgroundTasks de FastAPI cuando no hay Redis (despliegue costo cero).
+        * La tarea Celery ``process_document`` cuando hay Redis/volumen alto.
 
     Args:
         task_id: id de la fila ExtractionTask.
         pais: código ISO para la normativa del prompt (TAREA 1); vacío → "Genérica".
         columnas: campos prioritarios pedidos por el cliente (TAREA 1).
+
+    Returns:
+        dict con estado final; incluye ``retryable`` si el fallo fue transitorio.
     """
     from app.core.db.base import session_scope
     from app.core.db.models import Document
@@ -184,6 +190,11 @@ def process_document(self, task_id: str,
                 TaskStatus.COMPLETED if report.is_valid else TaskStatus.NEEDS_REVIEW
             )
             task.finished_at = datetime.now(timezone.utc)
+
+            # TAREA 1.5: el documento se procesó con éxito → consume cuota.
+            if doc.user is not None:
+                doc.user.documents_used += 1
+
             _log.info("Tarea %s terminada: %s (issues=%d)", task_id, task.status,
                       len(report.issues))
             return {
@@ -196,8 +207,22 @@ def process_document(self, task_id: str,
             friendly = _friendly_message(exc)
             _log.exception("Error procesando tarea %s", task_id)
             _mark_failed(task_id, friendly)  # transacción propia: inmune a reintentos
-            if (isinstance(exc, _RETRYABLE)
-                    and not settings.celery_eager
-                    and self.request.retries < self.max_retries):
-                raise self.retry(exc=exc)
-            return {"status": "failed", "error": friendly}
+            return {
+                "status": "failed",
+                "error": friendly,
+                "retryable": isinstance(exc, _RETRYABLE),
+            }
+
+
+@celery.task(name="process_document", bind=True, max_retries=2, default_retry_delay=10)
+def process_document(self, task_id: str,
+                     pais: str | None = None,
+                     columnas: list[str] | None = None) -> dict:
+    """Tarea Celery: envuelve run_extraction con reintentos ante fallos transitorios."""
+    result = run_extraction(task_id, pais, columnas)
+    settings = get_settings()
+    if (result.get("retryable")
+            and not settings.celery_eager
+            and self.request.retries < self.max_retries):
+        raise self.retry(exc=RuntimeError(result.get("error", "fallo transitorio")))
+    return result

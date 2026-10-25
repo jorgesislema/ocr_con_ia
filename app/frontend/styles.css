@@ -48,6 +48,40 @@ body {
   font-size: 0.8rem;
 }
 
+/* ── TAREA 2: sesión en la navbar ── */
+.session-box { display: flex; align-items: center; gap: 12px; }
+.user-info { font-size: 0.85rem; color: var(--text); }
+.user-info::first-line { color: var(--text); }
+
+/* ── TAREA 2: pantalla de login ── */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  width: min(380px, 92vw);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 34px 30px; display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+.login-card .brand.big { font-size: 1.5rem; text-align: center; }
+.login-card .field { display: flex; flex-direction: column; gap: 4px; }
+.login-card .field span { font-size: 0.75rem; color: var(--muted); }
+.login-card input {
+  background: #141428; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-error { color: var(--error); font-size: 0.82rem; min-height: 1em; }
+.btn.wide { width: 100%; }
+.small { font-size: 0.75rem; }
+
+/* Sin sesión autenticada: el flujo de 4 pasos permanece bloqueado */
+body:not(.authenticated) .stepper,
+body:not(.authenticated) main,
+body:not(.authenticated) footer { display: none; }
+
 /* ── Stepper (flujo de 4 pasos) ── */
 .stepper {
   display: flex; justify-content: center; gap: 8px;

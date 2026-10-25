@@ -15,7 +15,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Raíz del proyecto (…/ocr_con_ia)
@@ -23,7 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
-    """Ajustes del SaaS, sobreescribibles por variables de entorno."""
+    """Ajustes del SaaS, sobreescribibles por variables de entorno.
+
+    Convención de nombres: las plataformas cloud (Render/Supabase/Railway)
+    inyectan ``DATABASE_URL`` y ``REDIS_URL`` sin prefijo, por lo que ambas
+    se aceptan con y sin el prefijo ``OCR_``.
+    """
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
@@ -39,15 +44,42 @@ class Settings(BaseSettings):
     export_dir: Path = Field(default=BASE_DIR / "storage" / "exports")
     max_upload_mb: int = 25
 
-    # ── Base de datos ─────────────────────────────────────────────────────
-    # En desarrollo SQLite; en producción cambiar por PostgreSQL:
-    #   OCR_DATABASE_URL=postgresql+psycopg://user:pass@host/db
-    database_url: str = Field(default=f"sqlite:///{BASE_DIR / 'storage' / 'saas.db'}")
+    # ── Base de datos (TAREA 3.1) ─────────────────────────────────────────
+    # Prod: DATABASE_URL (PostgreSQL de Supabase/Render). Dev: vacío → SQLite.
+    database_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("DATABASE_URL", "OCR_DATABASE_URL"),
+    )
 
-    # ── Cola asíncrona (Celery) ───────────────────────────────────────────
-    redis_url: str = Field(default="redis://localhost:6379/0")
-    # En desarrollo sin Redis, Celery corre en modo "eager" (síncrono).
+    # ── Cola asíncrona (TAREA 3.2) ────────────────────────────────────────
+    # Sin REDIS_URL → BackgroundTasks de FastAPI (despliegue costo cero).
+    # Con REDIS_URL → Celery + Redis (mayor volumen).
+    redis_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("REDIS_URL", "OCR_REDIS_URL"),
+    )
+    queue_backend: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("QUEUE_BACKEND", "OCR_QUEUE_BACKEND"),
+    )  # auto | background | celery
     celery_eager: bool = Field(default=True)
+
+    # ── Autenticación JWT (TAREA 1) ───────────────────────────────────────
+    jwt_secret: str = Field(
+        default="dev-only-secret-cambiar-en-produccion",
+        validation_alias=AliasChoices("JWT_SECRET", "OCR_JWT_SECRET"),
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = Field(
+        default=1440,
+        validation_alias=AliasChoices("JWT_EXPIRE_MINUTES", "OCR_JWT_EXPIRE_MINUTES"),
+    )
+    # Clave de administrador para crear cuentas (modelo sin pasarela de pago:
+    # el cliente paga por transferencia y habilitamos la cuenta a mano).
+    admin_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("ADMIN_KEY", "OCR_ADMIN_KEY"),
+    )
 
     # ── Selección de proveedor IA (regla arquitectónica #1) ───────────────
     # "auto"  → el sistema elige según la dificultad del documento.
@@ -59,6 +91,40 @@ class Settings(BaseSettings):
 
     # Tolerancia monetaria del validador determinista (unidades de moneda).
     validation_tolerance: float = 0.02
+
+    # ── CORS (TAREA 3.3): dominios del frontend (Vercel/Netlify) ──────────
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173,"
+                "http://localhost:8000,http://127.0.0.1:8000",
+        validation_alias=AliasChoices("CORS_ORIGINS", "OCR_CORS_ORIGINS"),
+    )
+    # Regex para previews de Vercel/Netlify (subdominios dinámicos).
+    cors_origin_regex: str = Field(
+        default=r"https://.*\.(vercel\.app|netlify\.app)",
+        validation_alias=AliasChoices("CORS_ORIGIN_REGEX", "OCR_CORS_ORIGIN_REGEX"),
+    )
+
+    def resolved_database_url(self) -> str:
+        """DATABASE_URL efectiva: PostgreSQL prod o SQLite dev.
+
+        Normaliza el esquema ``postgres://`` (legacy de Supabase/Heroku) al
+        driver psycopg que espera SQLAlchemy.
+        """
+        url = self.database_url
+        if not url:
+            return f"sqlite:///{BASE_DIR / 'storage' / 'saas.db'}"
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return url
+
+    @property
+    def use_background_tasks(self) -> bool:
+        """True si la cola debe resolverse con BackgroundTasks (sin Redis)."""
+        return self.queue_backend == "background" or (
+            self.queue_backend == "auto" and not self.redis_url
+        )
 
 
 @lru_cache
