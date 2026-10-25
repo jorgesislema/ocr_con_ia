@@ -1,0 +1,38 @@
+# ── Dependencias de la capa SaaS (app/) ──────────────────────────────────────
+# Instalar con:  pip install -r requirements-saas.txt
+# Las dependencias de escritorio están en requirements.txt (PyQt6, etc.)
+
+# API y validación
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.12.5
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# Base de datos
+sqlalchemy==2.0.36
+alembic==1.14.0          # migraciones (prod)
+psycopg[binary]==3.2.3   # PostgreSQL en producción (opcional en dev)
+
+# Cola asíncrona (regla arquitectónica #5)
+celery==5.4.0
+redis==5.2.1
+
+# Proveedores IA (regla arquitectónica #1)
+google-genai==0.8.0      # GeminiProvider (multimodal, tier gratuito)
+mistralai==1.9.0         # MistralProvider (OCR + LLM, alta precisión en tablas)
+
+# Secretos (regla arquitectónica #3)
+python-dotenv==1.2.2
+infisical-sdk==1.1.0     # opcional: backend Infisical
+hvac==2.3.0              # opcional: backend HashiCorp Vault
+
+# Exportación (Excel / CSV / Word / PDF)
+openpyxl==3.1.5
+xlsxwriter==3.2.9
+python-docx==1.2.0
+reportlab==4.2.5
+
+# Utilidades
+aiofiles==24.1.0
+pymupdf==1.25.1          # conteo de páginas / previsualización de PDF
