@@ -122,6 +122,11 @@ def consolidate_pages(page_invoices: list[InvoiceSchema]) -> InvoiceSchema:
             final_total = page.total
     base.total = final_total
 
+    # ── Texto completo: concatena el texto limpio de todas las páginas ────
+    texts = [(p.full_text_content or "").strip() for p in page_invoices]
+    joined = "\n\n".join(t for t in texts if t)
+    base.full_text_content = joined or None
+
     # ── Metadatos de página para trazabilidad ─────────────────────────────
     base.pages = [
         PageMeta(

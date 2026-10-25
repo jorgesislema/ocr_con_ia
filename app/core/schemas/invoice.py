@@ -157,6 +157,11 @@ class InvoiceSchema(BaseModel):
     # ── Trazabilidad ──────────────────────────────────────────────────────
     pages: list[PageMeta] = Field(default_factory=list, description="Metadatos por página")
     notes: str | None = None
+    # Texto completo y limpio del documento — lo pide el prompt (TAREA 1) y lo
+    # consume el exportador de Word/TXT (TAREA 3).
+    full_text_content: str | None = Field(
+        None, description="Texto completo limpio del documento para exportar a Word/TXT"
+    )
     extra_fields: dict[str, Any] = Field(
         default_factory=dict, description="Campos regionales no canónicos (passthrough)"
     )

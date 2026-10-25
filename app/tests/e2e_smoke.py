@@ -33,6 +33,7 @@ MOCK_INVOICE = {
     "discounts": [],
     "taxes": [{"type": "VAT", "rate": 21, "base_amount": 1000, "amount": 210}],
     "total": 1210,
+    "full_text_content": "FACTURA E2E-001 — Mock GmbH — texto completo de prueba",
 }
 
 
@@ -87,10 +88,11 @@ buf.seek(0)
 H = {"X-API-Key": API_KEY}
 
 r = client.post("/api/v1/documents", headers=H,
-                files={"file": ("e2e.pdf", buf, "application/pdf")})
+                files={"file": ("e2e.pdf", buf, "application/pdf")},
+                data={"pais": "ES", "columnas": "invoice_number,total,full_text_content"})
 assert r.status_code == 202, r.text
 task_id = r.json()["task_id"]
-print(f"[1] CARGA OK → task_id={task_id} ({r.json()['page_count']} páginas)")
+print(f"[1] CARGA OK → task_id={task_id} ({r.json()['page_count']} páginas, pais=ES)")
 
 import app.workers.tasks as wtasks  # noqa: E402 (referencia para procesar en línea)
 
@@ -128,12 +130,29 @@ task = r.json()
 assert task["status"] == "completed", task
 print(f"[3] REVISIÓN OK → status={task['status']} (re-validado por el backend)")
 
-# Exportación en los 4 formatos
+# Exportación en los 4 formatos + TXT dinámico con columnas selectivas
 for fmt in ("xlsx", "csv", "docx", "pdf"):
     r = client.post(f"/api/v1/tasks/{task_id}/export", headers={**H, "Content-Type": "application/json"},
                     json={"format": fmt})
     assert r.status_code == 200, (fmt, r.text)
     size = len(r.content)
     print(f"[4] EXPORT {fmt.upper()} OK ({size} bytes, {r.headers.get('content-type')})")
+
+# TAREA 2/3: formato txt + columnas solicitadas + Content-Disposition
+r = client.post(f"/api/v1/tasks/{task_id}/export", headers={**H, "Content-Type": "application/json"},
+                json={"formato": "txt", "columnas": ["invoice_number"]})
+assert r.status_code == 200, r.text
+assert "attachment" in r.headers.get("content-disposition", "")
+txt = r.content.decode("utf-8")
+assert "FACTURA E2E-001" in txt, txt  # full_text_content presente
+print("[4] EXPORT TXT OK (formato + columnas dinámicas + Content-Disposition)")
+
+# TAREA 2/3: csv con columnas limitadas
+r = client.post(f"/api/v1/tasks/{task_id}/export", headers={**H, "Content-Type": "application/json"},
+                json={"formato": "csv", "columnas": ["invoice_number", "total"]})
+assert r.status_code == 200, r.text
+first_line = r.content.decode("utf-8-sig").splitlines()[0]
+assert first_line == "invoice_number,total", first_line
+print(f"[4] EXPORT CSV con columnas OK (encabezado: {first_line})")
 
 print("\n✅ E2E COMPLETO: carga → extracción → validación → revisión → exportación")

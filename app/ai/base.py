@@ -19,10 +19,13 @@ class ExtractionInput:
     file_path: Path
     mime_type: str                     # application/pdf | image/png | ...
     hint: str = "invoice"              # invoice | receipt | music_score | generic
+    # País del documento (ISO-3166 alpha-2, p. ej. "EC", "MX", "ES").
+    # Determina la normativa fiscal inyectada en el prompt (TAREA 1).
+    pais: str = ""
+    # Columnas solicitadas por el cliente — la IA prioriza estos campos.
+    columnas_solicitadas: list[str] = field(default_factory=list)
     # Pista de dificultad para el enrutado del Factory (0=fácil, 10=complejo)
     difficulty: int = 5
-    # Contexto regional para guiar la extracción fiscal
-    region_hint: str | None = None     # LATAM | EU | None
     # Por documento multipágina: extraer por separado cada página (regla #4)
     split_pages: bool = False
 

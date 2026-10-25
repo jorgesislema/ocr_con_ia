@@ -71,10 +71,13 @@ class MistralProvider(BaseAIProvider):
         return "\n\n".join(page.markdown for page in response.pages)
 
     # ── Etapa 2: Markdown → JSON canónico ─────────────────────────────────
-    def _structure(self, markdown: str, hint: str, region_hint: str | None,
+    def _structure(self, markdown: str, pais: str, columnas: list[str],
                    is_single_page: bool = True) -> dict:
-        prompt = build_extraction_prompt(hint=hint, region_hint=region_hint,
-                                         is_single_page=is_single_page)
+        prompt = build_extraction_prompt(
+            pais=pais,
+            columnas_solicitadas=columnas,
+            is_single_page=is_single_page,
+        )
         chat = self._client.chat.complete(
             model=self._llm_model,
             messages=[
@@ -94,7 +97,7 @@ class MistralProvider(BaseAIProvider):
     def extract_data(self, file: ExtractionInput) -> ExtractionResult:
         """OCR completo del documento + estructurización a JSON canónico."""
         markdown = self._ocr_markdown(file)
-        data = self._structure(markdown, file.hint, file.region_hint)
+        data = self._structure(markdown, file.pais, file.columnas_solicitadas)
         return ExtractionResult(
             data=data,
             provider=self.name,
@@ -105,4 +108,5 @@ class MistralProvider(BaseAIProvider):
     def extract_page(self, file: ExtractionInput, page_number: int) -> dict:
         """OCR de una sola página + estructurización parcial (multipágina)."""
         markdown = self._ocr_markdown(file, pages=[page_number])
-        return self._structure(markdown, file.hint, file.region_hint, is_single_page=False)
+        return self._structure(markdown, file.pais, file.columnas_solicitadas,
+                               is_single_page=False)

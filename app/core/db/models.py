@@ -43,6 +43,7 @@ class ExportFormat(str, enum.Enum):
     CSV = "csv"
     DOCX = "docx"
     PDF = "pdf"
+    TXT = "txt"
 
 
 class User(Base):

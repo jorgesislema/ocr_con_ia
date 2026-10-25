@@ -17,9 +17,9 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -74,13 +74,32 @@ def _task_to_out(task: ExtractionTask) -> TaskOut:
 
 # ── POST /documents: subir y encolar ─────────────────────────────────────────
 
+def _parse_columnas(raw: str | None) -> list[str] | None:
+    """Acepta columnas como JSON array (["a","b"]) o separadas por coma ("a,b")."""
+    if not raw or not raw.strip():
+        return None
+    raw = raw.strip()
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(c) for c in parsed if str(c).strip()]
+    except json.JSONDecodeError:
+        pass
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
 @router.post("/documents", status_code=202)
 async def upload_document(
     file: UploadFile = File(...),
+    pais: str | None = Form(None, description="Código ISO del país (EC, MX, ES…): fija la normativa del prompt"),
+    columnas: str | None = Form(None, description="Columnas prioritarias: JSON array o separadas por coma"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Recibe el archivo, lo almacena y encola la extracción asíncrona.
+
+    ``pais`` y ``columnas`` (opcionales) viajan con la tarea hasta el worker,
+    que los inyecta en el prompt dinámico (TAREA 1) sin cambiar el esquema DB.
 
     Returns:
         ``{"task_id": …, "status": "queued"}`` — el frontend hace polling
@@ -129,10 +148,12 @@ async def upload_document(
     db.commit()
 
     # ── Encolado (regla #5): eager en dev, Redis/Celery en prod ────────────
+    # pais/columnas viajan como kwargs de la tarea (sin cambios de esquema DB).
     from app.workers.tasks import process_document
 
-    process_document.delay(task.id)
-    _log.info("Tarea %s encolada (%s, %d pág.)", task.id, document.filename, page_count)
+    process_document.delay(task.id, pais=pais, columnas=_parse_columnas(columnas))
+    _log.info("Tarea %s encolada (%s, %d pág., pais=%s)", task.id, document.filename,
+              page_count, pais or "auto")
 
     return {"task_id": task.id, "status": "queued", "page_count": page_count}
 
@@ -199,35 +220,62 @@ def review_task(task_id: str, review: HumanReview,
 # ── POST /tasks/{task_id}/export: exportación (paso 4 del flujo) ─────────────
 
 class ExportRequest(BaseModel):
-    format: ExportFormat = ExportFormat.XLSX
+    """Payload de exportación dinámica (TAREA 2).
+
+    ``format`` se acepta como alias de ``formato`` para compatibilidad con
+    el frontend existente.
+    """
+
+    formato: str = Field(
+        default="xlsx",
+        validation_alias=AliasChoices("formato", "format"),
+        description="xlsx | csv | docx | txt | pdf",
+    )
+    columnas: list[str] | None = Field(
+        None, description="Columnas solicitadas (xlsx/csv). Vacío → set por defecto."
+    )
 
 
 @router.post("/tasks/{task_id}/export")
 def export_task(task_id: str, body: ExportRequest,
                 user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)) -> FileResponse:
-    """Genera el fichero (Excel/CSV/Word/PDF) desde el JSON canónico final."""
+                db: Session = Depends(get_db)) -> StreamingResponse:
+    """Exporta el JSON canónico con columnas selectivas y sanitización.
+
+    Solo permite tareas terminadas (``completed`` o ``needs_review``) y
+    devuelve el archivo por streaming con ``Content-Disposition`` correcto.
+    """
     task = db.get(ExtractionTask, task_id)
     if task is None or (task.document and task.document.user_id != user.id):
         raise HTTPException(404, "Tarea no encontrada.")
+
+    # TAREA 2.2: la tarea debe estar terminada para poder exportarse.
+    if task.status not in (TaskStatus.COMPLETED, TaskStatus.NEEDS_REVIEW):
+        raise HTTPException(
+            409, f"La tarea está en estado '{task.status.value}'. "
+                 f"Solo se puede exportar en 'completed' o 'needs_review'."
+        )
     if task.extracted_data is None:
-        raise HTTPException(409, "La tarea aún no tiene datos extraídos.")
+        raise HTTPException(409, "La tarea no tiene datos extraídos.")
 
-    from app.services.exporter import MIME_TYPES, export_invoice
+    from app.services.exporter import MIME_TYPES, DocumentExporter
 
-    invoice = InvoiceSchema.model_validate(task.extracted_data)
-    fmt = body.format.value
-    base_name = f"{task_id[:8]}_{(task.document.filename or 'documento').rsplit('.', 1)[0]}"
+    fmt = (body.formato or "xlsx").strip().lower()
     try:
-        out_path = export_invoice(invoice, fmt, get_settings().export_dir, base_name)
+        # TAREA 2.3/3: servicio de exportación seguro sobre el JSON canónico guardado.
+        content = DocumentExporter(task.extracted_data, body.columnas).export(fmt)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
-    db.add(ExportFile(task_id=task.id, format=body.format, file_path=str(out_path)))
+    # Auditoría del export (la ruta guarda el nombre de fichero entregado).
+    base_name = f"{task_id[:8]}_{(task.document.filename or 'documento').rsplit('.', 1)[0]}"
+    filename = f"{base_name}.{fmt}"
+    db.add(ExportFile(task_id=task.id, format=ExportFormat(fmt), file_path=filename))
     db.commit()
 
-    return FileResponse(
-        path=out_path,
+    # TAREA 2.4: StreamingResponse con headers correctos.
+    return StreamingResponse(
+        iter([content]),
         media_type=MIME_TYPES[fmt],
-        filename=out_path.name,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

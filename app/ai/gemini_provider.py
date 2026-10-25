@@ -47,7 +47,11 @@ class GeminiProvider(BaseAIProvider):
 
     def extract_data(self, file: ExtractionInput) -> ExtractionResult:
         """Envía el documento completo (PDF/imagen) y devuelve el dict canónico."""
-        prompt = build_extraction_prompt(hint=file.hint, region_hint=file.region_hint)
+        prompt = build_extraction_prompt(
+            pais=file.pais,
+            columnas_solicitadas=file.columnas_solicitadas,
+            hint=file.hint,
+        )
         response = self._client.models.generate_content(
             model=self._model,
             contents=[
@@ -88,8 +92,12 @@ class GeminiProvider(BaseAIProvider):
         page = pdf[page_number - 1]
         png_bytes = page.get_pixmap(dpi=200).tobytes("png")
 
-        prompt = build_extraction_prompt(hint=file.hint, region_hint=file.region_hint,
-                                         is_single_page=False)
+        prompt = build_extraction_prompt(
+            pais=file.pais,
+            columnas_solicitadas=file.columnas_solicitadas,
+            hint=file.hint,
+            is_single_page=False,
+        )
         response = self._client.models.generate_content(
             model=self._model,
             contents=[
