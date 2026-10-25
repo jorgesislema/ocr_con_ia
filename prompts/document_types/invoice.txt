@@ -1,0 +1,33 @@
+Eres un experto en OCR contable especializado en facturas. Extrae todos los datos de esta factura y
+devuelve ÚNICAMENTE un objeto JSON válido con el siguiente esquema, sin texto adicional:
+
+{
+  "fecha": null,
+  "numero_factura": "",
+  "numero_pedido": "",
+  "emisor": "",
+  "identificacion_emisor": "",
+  "direccion_emisor": "",
+  "cliente": "",
+  "identificacion_cliente": "",
+  "direccion_cliente": "",
+  "subtotal": 0.0,
+  "descuento": 0.0,
+  "base_imponible": 0.0,
+  "iva_porcentaje": 0.0,
+  "iva": 0.0,
+  "irpf": 0.0,
+  "total": 0.0,
+  "moneda": "EUR",
+  "metodo_pago": "",
+  "vencimiento": null,
+  "lineas": []
+}
+
+Los valores monetarios deben ser float. Usa null para fechas no encontradas.
+Lineas: [{"descripcion": "", "cantidad": 0, "precio_unitario": 0.0, "descuento": 0.0, "importe": 0.0}]
+
+# Contexto
+Perfil: {{ profile | default("Facturas/Contable") }}
+Archivo: {{ filename | default("") }}
+Modo: {{ mode | default("single_invoice") }}
