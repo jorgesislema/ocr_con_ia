@@ -9,6 +9,9 @@ __pycache__/
 # Env
 .env
 
+# SaaS: almacenamiento local (uploads, exports, DB SQLite dev)
+storage/
+
 # Editor
 .vscode/
 

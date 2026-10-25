@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OCR Con IA — Extracción de documentos</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">◈ OCR Con IA <span class="badge">SaaS v1.0</span></div>
+    <input id="apiKey" type="password" placeholder="X-API-Key (opcional en dev)" class="apikey-input" />
+  </header>
+
+  <!-- ══ Indicador de pasos: 1 Carga → 2 Progreso → 3 Revisión → 4 Exportación ══ -->
+  <nav class="stepper" id="stepper">
+    <div class="step active" data-step="1"><span class="dot">1</span> Carga</div>
+    <div class="step" data-step="2"><span class="dot">2</span> Progreso</div>
+    <div class="step" data-step="3"><span class="dot">3</span> Revisión</div>
+    <div class="step" data-step="4"><span class="dot">4</span> Exportación</div>
+  </nav>
+
+  <main>
+    <!-- ══ PASO 1: CARGA ══ -->
+    <section id="step-1" class="panel active">
+      <h1>Sube tu documento</h1>
+      <p class="muted">Facturas LatAm (multi-impuesto), Europa (multipágina), manuscritos,
+        PDF, PNG, JPEG, TIFF. Máx. 25 MB.</p>
+      <div id="dropzone" class="dropzone">
+        <p><strong>Arrastra el archivo aquí</strong></p>
+        <p class="muted">o</p>
+        <button id="browseBtn" class="btn primary">Elegir archivo…</button>
+        <input id="fileInput" type="file" hidden
+               accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp" />
+      </div>
+      <p id="fileInfo" class="file-info"></p>
+    </section>
+
+    <!-- ══ PASO 2: PROGRESO ══ -->
+    <section id="step-2" class="panel">
+      <h1>Extrayendo datos…</h1>
+      <p class="muted" id="progressText">Enviando documento al motor de IA…</p>
+      <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
+      <div id="progressLog" class="progress-log"></div>
+    </section>
+
+    <!-- ══ PASO 3: REVISIÓN HUMANA (tabla editable) ══ -->
+    <section id="step-3" class="panel">
+      <h1>Revisa y corrige</h1>
+      <div id="validationBanner" class="banner"></div>
+
+      <h2>Datos del documento</h2>
+      <div id="metaFields" class="grid-fields"></div>
+
+      <h2>Impuestos <button id="addTaxBtn" class="btn small">+ Añadir impuesto</button></h2>
+      <table id="taxesTable" class="editable">
+        <thead><tr><th>Tipo</th><th>Tasa %</th><th>Base</th><th>Importe</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>Descuentos <button id="addDiscountBtn" class="btn small">+ Añadir descuento</button></h2>
+      <table id="discountsTable" class="editable">
+        <thead><tr><th>Concepto</th><th>Importe</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>Líneas de detalle</h2>
+      <table id="linesTable" class="editable">
+        <thead><tr><th>Descripción</th><th>Cantidad</th><th>P.Unit</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="totals-box" id="totalsBox"></div>
+
+      <div class="actions">
+        <button id="revalidateBtn" class="btn">↻ Re-validar matemáticamente</button>
+        <button id="approveBtn" class="btn success">✔ Aprobar y continuar</button>
+        <button id="backToUpload" class="btn ghost">← Nuevo documento</button>
+      </div>
+    </section>
+
+    <!-- ══ PASO 4: EXPORTACIÓN ══ -->
+    <section id="step-4" class="panel">
+      <h1>Documento aprobado ✔</h1>
+      <p class="muted">Descarga el resultado en el formato que necesites.</p>
+      <div class="export-grid">
+        <button class="btn export" data-fmt="xlsx">📊 Excel (.xlsx)</button>
+        <button class="btn export" data-fmt="csv">📃 CSV</button>
+        <button class="btn export" data-fmt="docx">📝 Word (.docx)</button>
+        <button class="btn export" data-fmt="pdf">📄 PDF</button>
+      </div>
+      <div class="actions">
+        <button id="startOverBtn" class="btn primary">Procesar otro documento</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="muted center">
+    La IA extrae · Python valida · Tú apruebas — OCR Con IA SaaS
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
