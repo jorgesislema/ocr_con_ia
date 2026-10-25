@@ -1,0 +1,22 @@
+# ── Dependencias del proyecto OCR-con-GLM-IA ─────────────────────────────────
+# Cada paquete en línea independiente (compatible con pip install -r)
+# sqlite3 es parte de la librería estándar de Python — no requiere instalación
+
+PyQt6==6.11.0
+matplotlib==3.10.8
+Pillow==12.2.0
+numpy>=2.0.0
+requests
+openai
+pymupdf
+zhipuai
+openpyxl==3.1.5
+python-docx==1.2.0
+pandas==3.0.2
+xlsxwriter==3.2.9
+python-dotenv==1.2.2
+keyring==25.7.0
+cryptography==46.0.6
+pydantic==2.12.5
+opencv-python==4.13.0.92
+pytest
